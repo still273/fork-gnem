@@ -63,9 +63,10 @@ class MergedMatchingDataset(Dataset):
         if other_path and not isinstance(other_path, list):
             other_path = [other_path]
         assert os.path.isfile(path), "{} is not a file".format(path)
-        for p in other_path:
-            if p:
-                assert os.path.isfile(p), "{} is not a file".format(p)
+        if other_path:
+            for p in other_path:
+                if p:
+                    assert os.path.isfile(p), "{} is not a file".format(p)
 
         self.data = pd.read_csv(path)
         if other_path:
@@ -101,28 +102,42 @@ class MergedMatchingDataset(Dataset):
         if type == 'l':
             self_neighbor = self.data[self.data["ltable_id"] == center_id]
             self_neighbor_ids = self_neighbor["rtable_id"].values.tolist()
-            other_neighbor = self.other_data[self.other_data["ltable_id"] == center_id]
-            other_neighbor_ids = other_neighbor["rtable_id"].values.tolist()
-            neighbor_ids = self_neighbor_ids + other_neighbor_ids
+            neighbor_ids = self_neighbor_ids
+            # 0 for not use label, 1 for use label
+            neighbor_masks = [1] * len(self_neighbor_ids)
+            if self.other_data:
+                other_neighbor = self.other_data[self.other_data["ltable_id"] == center_id]
+                other_neighbor_ids = other_neighbor["rtable_id"].values.tolist()
+                neighbor_ids += other_neighbor_ids
+                neighbor_masks += [0] * len(other_neighbor_ids)
+            #neighbor_ids = self_neighbor_ids + other_neighbor_ids
             center_example = self.tableA[self.tableA["id"] == center_id].values.tolist()[0]
             neighbor_examples = [self.tableB[self.tableB["id"] == i].values.tolist()[0] for i in neighbor_ids]
-            # 0 for not use label, 1 for use label
-            neighbor_masks = [1] * len(self_neighbor_ids) + [0] * len(other_neighbor_ids)
+
+
+            #neighbor_masks = [1] * len(self_neighbor_ids) + [0] * len(other_neighbor_ids)
 
         elif type == 'r':
             self_neighbor = self.data[self.data["rtable_id"] == center_id]
             self_neighbor_ids = self_neighbor["ltable_id"].values.tolist()
-            other_neighbor = self.other_data[self.other_data["rtable_id"] == center_id]
-            other_neighbor_ids = other_neighbor["ltable_id"].values.tolist()
-            neighbor_ids = self_neighbor_ids + other_neighbor_ids
+            neighbor_ids = self_neighbor_ids
+            neighbor_masks = [1] * len(self_neighbor_ids)
+            if self.other_data:
+                other_neighbor = self.other_data[self.other_data["rtable_id"] == center_id]
+                other_neighbor_ids = other_neighbor["ltable_id"].values.tolist()
+                neighbor_ids += other_neighbor_ids
+                neighbor_masks += [0] * len(other_neighbor_ids)
             center_example = self.tableB[self.tableB["id"] == center_id].values.tolist()[0]
             neighbor_examples = [self.tableA[self.tableA["id"] == i].values.tolist()[0] for i in neighbor_ids]
             # 0 for not use label, 1 for use label
-            neighbor_masks = [1] * len(self_neighbor_ids) + [0] * len(other_neighbor_ids)
+            #neighbor_masks = [1] * len(self_neighbor_ids) + [0] * len(other_neighbor_ids)
 
         else:
             raise NotImplementedError
-        labels = self_neighbor["label"].values.tolist() + other_neighbor["label"].values.tolist()
+        labels = self_neighbor["label"].values.tolist()
+
+        if self.other_data:
+            labels += other_neighbor["label"].values.tolist()
 
         example = {
             "type": type,

@@ -114,16 +114,21 @@ def test(iter,logger,model,embed_model,crit,test_step=None,tf_logger=None,score_
     if not isinstance(score_type,list):
         score_type = [score_type]
     f1s = []
+    ps = []
+    rs = []
+
     for t in score_type:
         p, r, f1, acc, score_dict = calculate_f1(edges, scores, labels, types, score_type=t.lower())
         f1s.append(f1)
+        ps.append(p)
+        rs.append(r)
         logger.info('{}\t{}\tPrecison {:.3f}\tRecall {:.3f}\tF1-score {:.3f}\tAccuracy {:.3f}'.format(prefix, t, p, r, f1, acc))
         if tf_logger:
             tf_logger.add_scalar('{}/{}/Precision'.format(prefix, t), p, test_step)
             tf_logger.add_scalar('{}/{}/Recall'.format(prefix, t), r, test_step)
             tf_logger.add_scalar('{}/{}/f1Score'.format(prefix, t), f1, test_step)
             tf_logger.add_scalar('{}/{}/Accuracy'.format(prefix, t), acc, test_step)
-    return f1s
+    return f1s, ps, rs
 
 
 if __name__ == '__main__':

@@ -11,16 +11,17 @@ from EmbedModel import EmbedModel
 from GCN import gcn
 from logger import set_logger
 from torch.utils.tensorboard import SummaryWriter
-from test import test as val
+from test_GNEM import test as val
 from utils import _read_csv, accuracy
-from pytorch_transformers import AdamW, WarmupLinearSchedule
+from transformers import AdamW, get_linear_schedule_with_warmup
 
 
 def tally_parameters(model):
     return sum([p.nelement() for p in model.parameters() if p.requires_grad])
 
 
-def train(iter, dir, logger, tf_logger, model, embed_model, opt, crit, epoch_num, start_epoch=0, scheduler=None, test_iter=None, val_iter=None, log_freq=1, start_f1=None):
+def train(iter, dir, logger, tf_logger, model, embed_model, opt, crit, epoch_num, start_epoch=0, scheduler=None,
+          test_iter=None, val_iter=None, log_freq=1, start_f1=None, score_type='mean'):
     p1=tally_parameters(embed_model)
     p2=tally_parameters(model)
     logger.info("Embed Model Parameter {}".format(p1))
@@ -63,10 +64,10 @@ def train(iter, dir, logger, tf_logger, model, embed_model, opt, crit, epoch_num
 
         if val_iter:
             f1s = val(iter=val_iter, logger=logger, tf_logger=tf_logger, model=model, embed_model=embed_model,prefix='Val',
-                      crit=crit, test_step=i + 1, score_type=args.test_score_type)
+                      crit=crit, test_step=i + 1, score_type=score_type)
             if max(f1s) > best_f1:
                 best_f1 = max(f1s)
-                best_type = args.test_score_type[f1s.index(best_f1)]
+                best_type = score_type[f1s.index(best_f1)]
                 state = {
                     "embed_model": embed_model.state_dict(),
                     "model": model.state_dict(),
@@ -76,19 +77,25 @@ def train(iter, dir, logger, tf_logger, model, embed_model, opt, crit, epoch_num
                 }
                 torch.save(state, os.path.join(dir, "best.pth"))
                 logger.info("Val Best F1score\t{}\t{:.4f}".format(best_type, best_f1))
-    if test_iter:
-        checkpoint = torch.load("best.pth")
-        embed_model.load_state_dict(checkpoint["embed_model"])
-        model.load_state_dict(checkpoint["model"])
-        embed_model = embed_model.to(embed_model.device)
-        model = model.to(embed_model.device)
-        best_epoch = checkpoint["epoch"]
-        best_type = checkpoint["type"]
-        valf1 = checkpoint["val_f1"]
-        logger.info("load from epoch {:d}  f1score {:.4f}".format(best_epoch, valf1))
-        f1s = val(iter=test_iter, logger=logger, model=model, embed_model=embed_model, prefix='Test',
-                  crit=crit, score_type=[best_type])
-        logger.info("Test F1score\tEpoch\t{:d}\t{}\t{:.4f}".format(best_epoch, best_type, f1s[0]))
+    with torch.no_grad():
+        if test_iter:
+            if val_iter:
+                checkpoint = torch.load("best.pth")
+                embed_model.load_state_dict(checkpoint["embed_model"])
+                model.load_state_dict(checkpoint["model"])
+                embed_model = embed_model.to(embed_model.device)
+                model = model.to(embed_model.device)
+                best_epoch = checkpoint["epoch"]
+                best_type = checkpoint["type"]
+                valf1 = checkpoint["val_f1"]
+                logger.info("load from epoch {:d}  f1score {:.4f}".format(best_epoch, valf1))
+            else:
+                best_epoch = epoch_num
+                best_type = None
+            f1s, ps, rs = val(iter=test_iter, logger=logger, model=model, embed_model=embed_model, prefix='Test',
+                      crit=crit, score_type=score_type)
+            logger.info("Test F1score\tEpoch\t{:d}\t{}\t{:.4f}".format(best_epoch, best_type, f1s[0]))
+            return f1s, ps, rs
 
 
 if __name__ == '__main__':
@@ -160,7 +167,7 @@ if __name__ == '__main__':
 
     num_train_steps = len(train_iter) * args.epochs
     opt = AdamW(optimizer_grouped_parameters, eps=1e-8)
-    scheduler = WarmupLinearSchedule(opt, warmup_steps=0, t_total=num_train_steps)
+    scheduler = get_linear_schedule_with_warmup(opt, warmup_steps=0, t_total=num_train_steps)
 
     model_dir = args.exp_dir
     log_dir = os.path.join(args.exp_dir, "logs")
@@ -200,7 +207,7 @@ if __name__ == '__main__':
     criterion = nn.CrossEntropyLoss(weight=torch.Tensor([neg, pos])).to(embedmodel.device)
 
     train(train_iter, model_dir, logger, tf_logger, model, embedmodel, opt, criterion, args.epochs, test_iter=test_iter, val_iter=val_iter,
-          scheduler=scheduler, log_freq=args.log_freq, start_epoch=start_epoch, start_f1=start_f1)
+          scheduler=scheduler, log_freq=args.log_freq, start_epoch=start_epoch, start_f1=start_f1, score_type=args.test_score_type)
 
 
 

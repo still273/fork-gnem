@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from pytorch_transformers import BertTokenizer, BertConfig, BertModel
+from transformers import BertTokenizer, BertConfig, BertModel
 
 
 
@@ -63,8 +63,9 @@ class EmbedModel(nn.Module):
         segment_ids = torch.Tensor(segment_ids).cuda().long()
         input_masks = torch.Tensor(input_masks).cuda().long()
 
-        _ , pooled_output = self.model(input_ids=input_ids, token_type_ids=segment_ids, attention_mask=input_masks)
-
+        #_ , pooled_output\
+        output = self.model(input_ids=input_ids, token_type_ids=segment_ids, attention_mask=input_masks)
+        pooled_output = output.pooler_output
         features = pooled_output
 
         return features
