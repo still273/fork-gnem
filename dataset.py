@@ -98,14 +98,14 @@ class MergedMatchingDataset(Dataset):
         for x in self.examples:
             yield x
 
-    def _make_example(self, center_id, type='l'):
-        if type == 'l':
+    def _make_example(self, center_id, t_type='l'):
+        if t_type == 'l':
             self_neighbor = self.data[self.data["ltable_id"] == center_id]
             self_neighbor_ids = self_neighbor["rtable_id"].values.tolist()
             neighbor_ids = self_neighbor_ids
             # 0 for not use label, 1 for use label
             neighbor_masks = [1] * len(self_neighbor_ids)
-            if self.other_data:
+            if type(self.other_data) != type(None):
                 other_neighbor = self.other_data[self.other_data["ltable_id"] == center_id]
                 other_neighbor_ids = other_neighbor["rtable_id"].values.tolist()
                 neighbor_ids += other_neighbor_ids
@@ -117,12 +117,12 @@ class MergedMatchingDataset(Dataset):
 
             #neighbor_masks = [1] * len(self_neighbor_ids) + [0] * len(other_neighbor_ids)
 
-        elif type == 'r':
+        elif t_type == 'r':
             self_neighbor = self.data[self.data["rtable_id"] == center_id]
             self_neighbor_ids = self_neighbor["ltable_id"].values.tolist()
             neighbor_ids = self_neighbor_ids
             neighbor_masks = [1] * len(self_neighbor_ids)
-            if self.other_data:
+            if type(self.other_data) != type(None):
                 other_neighbor = self.other_data[self.other_data["rtable_id"] == center_id]
                 other_neighbor_ids = other_neighbor["ltable_id"].values.tolist()
                 neighbor_ids += other_neighbor_ids
@@ -136,11 +136,11 @@ class MergedMatchingDataset(Dataset):
             raise NotImplementedError
         labels = self_neighbor["label"].values.tolist()
 
-        if self.other_data:
+        if type(self.other_data) != type(None):
             labels += other_neighbor["label"].values.tolist()
 
         example = {
-            "type": type,
+            "type": t_type,
             "center": center_example,
             "neighbors": neighbor_examples,
             "neighbors_mask": neighbor_masks,

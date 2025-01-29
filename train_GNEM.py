@@ -92,10 +92,10 @@ def train(iter, dir, logger, tf_logger, model, embed_model, opt, crit, epoch_num
             else:
                 best_epoch = epoch_num
                 best_type = None
-            f1s, ps, rs = val(iter=test_iter, logger=logger, model=model, embed_model=embed_model, prefix='Test',
+            f1s, ps, rs, score_dicts = val(iter=test_iter, logger=logger, model=model, embed_model=embed_model, prefix='Test',
                       crit=crit, score_type=score_type)
             logger.info("Test F1score\tEpoch\t{:d}\t{}\t{:.4f}".format(best_epoch, best_type, f1s[0]))
-            return f1s, ps, rs
+            return f1s, ps, rs, score_dicts
 
 
 if __name__ == '__main__':
