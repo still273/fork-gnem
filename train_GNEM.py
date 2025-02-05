@@ -78,6 +78,7 @@ def train(iter, dir, logger, tf_logger, model, embed_model, opt, crit, epoch_num
                 torch.save(state, os.path.join(dir, "best.pth"))
                 logger.info("Val Best F1score\t{}\t{:.4f}".format(best_type, best_f1))
     with torch.no_grad():
+        time_m = time.process_time()
         if test_iter:
             if val_iter:
                 checkpoint = torch.load("best.pth")
@@ -95,7 +96,7 @@ def train(iter, dir, logger, tf_logger, model, embed_model, opt, crit, epoch_num
             f1s, ps, rs, score_dicts = val(iter=test_iter, logger=logger, model=model, embed_model=embed_model, prefix='Test',
                       crit=crit, score_type=score_type)
             logger.info("Test F1score\tEpoch\t{:d}\t{}\t{:.4f}".format(best_epoch, best_type, f1s[0]))
-            return f1s, ps, rs, score_dicts
+            return f1s, ps, rs, score_dicts, time_m
 
 
 if __name__ == '__main__':
