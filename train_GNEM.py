@@ -63,7 +63,7 @@ def train(iter, dir, logger, tf_logger, model, embed_model, opt, crit, epoch_num
                 tf_logger.add_scalar('Train/Accuracy', acc, step)
 
         if val_iter:
-            f1s = val(iter=val_iter, logger=logger, tf_logger=tf_logger, model=model, embed_model=embed_model,prefix='Val',
+            f1s, _, _, _ = val(iter=val_iter, logger=logger, tf_logger=tf_logger, model=model, embed_model=embed_model,prefix='Val',
                       crit=crit, test_step=i + 1, score_type=score_type)
             if max(f1s) > best_f1:
                 best_f1 = max(f1s)
