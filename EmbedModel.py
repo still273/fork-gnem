@@ -1,12 +1,52 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from transformers import BertTokenizer, BertConfig, BertModel
+from transformers import BertTokenizer, BertConfig, BertModel,\
+    RobertaTokenizer, RobertaConfig, RobertaModel,\
+    DistilBertTokenizer, DistilBertConfig, DistilBertModel, \
+    AlbertTokenizer, AlbertConfig, AlbertModel, \
+    XLMTokenizer, XLMConfig,  XLMModel, \
+    XLNetTokenizer, XLNetConfig,  XLNetModel
 
+def _get_model(model_name):
+    if model_name == 'albert':
+        tokenizer = AlbertTokenizer.from_pretrained("albert/albert-base-v2")
+        config = AlbertConfig.from_pretrained("albert/albert-base-v2")
+        model = AlbertModel.from_pretrained("albert/albert-base-v2")
+        dim = config.hidden_size
+    elif model_name == 'bert':
+        tokenizer = BertTokenizer.from_pretrained('bert-base-uncased', do_lower_case=True)
+        config = BertConfig.from_pretrained('bert-base-uncased')
+        model = BertModel.from_pretrained('bert-base-uncased', config=config)
+        dim = config.hidden_size
+    elif model_name == 'xlnet':
+        tokenizer = XLNetTokenizer.from_pretrained("xlnet/xlnet-base-cased")
+        config = XLNetConfig.from_pretrained("xlnet/xlnet-base-cased")
+        model = XLNetModel.from_pretrained("xlnet/xlnet-base-cased", config=config)
+        dim = config.d_model
+    elif model_name == 'xlm':
+        tokenizer = XLMTokenizer.from_pretrained("FacebookAI/xlm-mlm-en-2048")
+        config = XLMConfig.from_pretrained("FacebookAI/xlm-mlm-en-2048")
+        model = XLMModel.from_pretrained("FacebookAI/xlm-mlm-en-2048", config=config)
+        dim = config.emb_dim
+    elif model_name == 'roberta':
+        tokenizer = RobertaTokenizer.from_pretrained("FacebookAI/roberta-base")
+        config = RobertaConfig.from_pretrained("FacebookAI/roberta-base")
+        model = RobertaModel.from_pretrained("FacebookAI/roberta-base")
+        dim = config.hidden_size
+    elif model_name == 'distilbert':
+        tokenizer = DistilBertTokenizer.from_pretrained("distilbert-base-uncased")
+        config = DistilBertConfig.from_pretrained("distilbert-base-uncased")
+        model = DistilBertModel.from_pretrained("distilbert-base-uncased")
+        dim = config.dim
+    else:
+        print('No known model')
+        return None
+    return model, tokenizer, config, dim
 
 
 class EmbedModel(nn.Module):
-    def __init__(self, useful_field_num, device='cuda'):
+    def __init__(self, useful_field_num, lm, device='cuda'):
         super(EmbedModel, self).__init__()
 
         #if not isinstance(device, list):
@@ -15,17 +55,20 @@ class EmbedModel(nn.Module):
             self.device = torch.device("cuda:{:d}".format(device[0]))
         else:
             self.device = device
-
-        self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased', do_lower_case=True)
-        self.config = BertConfig.from_pretrained('bert-base-uncased')
-        self.max_token_length = self.config.max_position_embeddings
-        if torch.cuda.is_available() and type(device)==list:
-            self.model = nn.DataParallel(BertModel.from_pretrained('bert-base-uncased', config=self.config), device_ids=device)
+        model, self.tokenizer, self.config, self.dim = _get_model(lm)
+        #self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased', do_lower_case=True)
+        #self.config = BertConfig.from_pretrained('bert-base-uncased')
+        if lm == 'xlnet' or lm == 'xlm':
+            self.max_token_length = 1000
         else:
-            self.model = BertModel.from_pretrained('bert-base-uncased', config=self.config)
+            self.max_token_length = self.config.max_position_embeddings
+        if torch.cuda.is_available() and type(device)==list:
+            self.model = nn.DataParallel(model, device_ids=device)#BertModel.from_pretrained('bert-base-uncased', config=self.config), device_ids=device)
+        else:
+            self.model = model #BertModel.from_pretrained('bert-base-uncased', config=self.config)
         for param in self.model.parameters():
             param.requires_grad = True
-        self.dim = 768
+        #self.dim = 768
         self.similarity_network = nn.Sequential(
             nn.Linear(2 * self.dim, self.dim),
             nn.ReLU(),
@@ -59,19 +102,28 @@ class EmbedModel(nn.Module):
                 input_masks[i] += [0] * padding_len
                 segment_ids[i] += [0] * padding_len
             elif padding_len < 0:
-                token_padding = int(segment_ids[i].index(1) / len(segment_ids[i])*(-padding_len))
+                token_padding = int(round(segment_ids[i].index(1) / len(segment_ids[i])*(-padding_len)))
                 center_padding = -padding_len - token_padding
-                input_ids[i] = input_ids[i][:segment_ids[i].index(1)][:-token_padding] + input_ids[i][segment_ids[i].index(1):][:-center_padding]
-                input_masks[i] = input_masks[i][:segment_ids[i].index(1)][:-token_padding] + input_masks[i][segment_ids[i].index(1):][:-center_padding]
-                segment_ids[i] = segment_ids[i][:segment_ids[i].index(1)][:-token_padding] + segment_ids[i][segment_ids[i].index(1):][:-center_padding]
+                if token_padding==0:
+                    input_ids[i] = input_ids[i][:-center_padding]
+                    input_masks[i] = input_masks[i][:-center_padding]
+                    segment_ids[i] = segment_ids[i][:-center_padding]
+                else:
+                    input_ids[i] = (input_ids[i][:segment_ids[i].index(1)][:-token_padding] +
+                                    input_ids[i][segment_ids[i].index(1):][:-center_padding])
+                    input_masks[i] = (input_masks[i][:segment_ids[i].index(1)][:-token_padding] +
+                                      input_masks[i][segment_ids[i].index(1):][:-center_padding])
+                    segment_ids[i] = (segment_ids[i][:segment_ids[i].index(1)][:-token_padding] +
+                                      segment_ids[i][segment_ids[i].index(1):][:-center_padding])
 
+            if segment_ids[i].index(1) < 5:
+                print(segment_ids[i], padding_len)
             assert len(input_ids[i]) == max_len
             assert len(input_masks[i]) == max_len
             assert len(segment_ids[i]) == max_len
 
 
         input_ids = torch.Tensor(input_ids).cuda().long()
-        print(input_ids.shape)
         segment_ids = torch.Tensor(segment_ids).cuda().long()
         input_masks = torch.Tensor(input_masks).cuda().long()
 

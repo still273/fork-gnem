@@ -70,7 +70,7 @@ def train(iter, dir, logger, tf_logger, model, embed_model, opt, crit, epoch_num
         t_train = time.process_time()
         if val_iter:
             f1s, _, _, _ = val(iter=val_iter, logger=logger, tf_logger=tf_logger, model=model, embed_model=embed_model,prefix='Val',
-                      crit=crit, test_step=i + 1, score_type=score_type)
+                      crit=crit, log_freq=len(val_iter)//10, test_step=i + 1, score_type=score_type)
             if max(f1s) > best_f1:
                 best_f1 = max(f1s)
                 best_type = score_type[f1s.index(best_f1)]
@@ -88,7 +88,7 @@ def train(iter, dir, logger, tf_logger, model, embed_model, opt, crit, epoch_num
         t_val = time.process_time()
         if test_iter:
             test_f1s, test_ps, test_rs, _ = val(iter=test_iter, logger=logger, model=model, embed_model=embed_model, prefix='Test',
-                                 crit=crit, test_step = i+1,score_type=score_type)
+                                 crit=crit, log_freq=len(test_iter)//10, test_step = i+1,score_type=score_type)
         else:
             test_f1s = 0
             test_ps = 0
@@ -119,7 +119,7 @@ def train(iter, dir, logger, tf_logger, model, embed_model, opt, crit, epoch_num
                 best_epoch = epoch_num
                 best_type = None
             f1s, ps, rs, score_dicts = val(iter=test_iter, logger=logger, model=model, embed_model=embed_model, prefix='Test',
-                      crit=crit, score_type=score_type)
+                      crit=crit, log_freq=len(test_iter)//10, score_type=score_type)
             logger.info("Test F1score\tEpoch\t{:d}\t{}\t{:.4f}".format(best_epoch, best_type, f1s[0]))
             return f1s, ps, rs, score_dicts, time_m, results
 
