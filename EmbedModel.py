@@ -18,6 +18,7 @@ class EmbedModel(nn.Module):
 
         self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased', do_lower_case=True)
         self.config = BertConfig.from_pretrained('bert-base-uncased')
+        self.max_token_length = self.config.max_position_embeddings
         if torch.cuda.is_available() and type(device)==list:
             self.model = nn.DataParallel(BertModel.from_pretrained('bert-base-uncased', config=self.config), device_ids=device)
         else:
@@ -44,7 +45,7 @@ class EmbedModel(nn.Module):
         tokens = [["[CLS]"] + self.tokenizer.tokenize(s) + ["[SEP]"] for s in sentences]
         lengths = [len(t) for t in tokens]
         center_length = len(center_tokens)
-        max_len = max(lengths) + center_length
+        max_len = min(max(lengths) + center_length, self.max_token_length)
 
 
         input_ids = [self.tokenizer.convert_tokens_to_ids(t + center_tokens) for t in tokens]
@@ -53,9 +54,16 @@ class EmbedModel(nn.Module):
 
         for i in range(node_num):
             padding_len = max_len - len(input_ids[i])
-            input_ids[i] += [0] * padding_len
-            input_masks[i] += [0] * padding_len
-            segment_ids[i] += [0] * padding_len
+            if padding_len > 0:
+                input_ids[i] += [0] * padding_len
+                input_masks[i] += [0] * padding_len
+                segment_ids[i] += [0] * padding_len
+            elif padding_len < 0:
+                token_padding = int(segment_ids[i].index(1) / len(segment_ids[i])*(-padding_len))
+                center_padding = -padding_len - token_padding
+                input_ids[i] = input_ids[i][:segment_ids[i].index(1)][:-token_padding] + input_ids[i][segment_ids[i].index(1):][:-center_padding]
+                input_masks[i] = input_masks[i][:segment_ids[i].index(1)][:-token_padding] + input_masks[i][segment_ids[i].index(1):][:-center_padding]
+                segment_ids[i] = segment_ids[i][:segment_ids[i].index(1)][:-token_padding] + segment_ids[i][segment_ids[i].index(1):][:-center_padding]
 
             assert len(input_ids[i]) == max_len
             assert len(input_masks[i]) == max_len
@@ -63,6 +71,7 @@ class EmbedModel(nn.Module):
 
 
         input_ids = torch.Tensor(input_ids).cuda().long()
+        print(input_ids.shape)
         segment_ids = torch.Tensor(segment_ids).cuda().long()
         input_masks = torch.Tensor(input_masks).cuda().long()
 
