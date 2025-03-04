@@ -6,16 +6,19 @@ from transformers import BertTokenizer, BertConfig, BertModel
 
 
 class EmbedModel(nn.Module):
-    def __init__(self, useful_field_num, device=0):
+    def __init__(self, useful_field_num, device='cuda'):
         super(EmbedModel, self).__init__()
 
-        if not isinstance(device, list):
-            device = [device]
-        self.device = torch.device("cuda:{:d}".format(device[0]))
+        #if not isinstance(device, list):
+        #    device = [device]
+        if type(device) == list:
+            self.device = torch.device("cuda:{:d}".format(device[0]))
+        else:
+            self.device = device
 
         self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased', do_lower_case=True)
         self.config = BertConfig.from_pretrained('bert-base-uncased')
-        if torch.cuda.is_available() and len(device) > 1:
+        if torch.cuda.is_available() and type(device)==list:
             self.model = nn.DataParallel(BertModel.from_pretrained('bert-base-uncased', config=self.config), device_ids=device)
         else:
             self.model = BertModel.from_pretrained('bert-base-uncased', config=self.config)
