@@ -108,6 +108,13 @@ class EmbedModel(nn.Module):
                     input_ids[i] = input_ids[i][:-center_padding]
                     input_masks[i] = input_masks[i][:-center_padding]
                     segment_ids[i] = segment_ids[i][:-center_padding]
+                elif center_padding==0:
+                    input_ids[i] = (input_ids[i][:segment_ids[i].index(1)][:-token_padding] +
+                                    input_ids[i][segment_ids[i].index(1):])
+                    input_masks[i] = (input_masks[i][:segment_ids[i].index(1)][:-token_padding] +
+                                      input_masks[i][segment_ids[i].index(1):])
+                    segment_ids[i] = (segment_ids[i][:segment_ids[i].index(1)][:-token_padding] +
+                                      segment_ids[i][segment_ids[i].index(1):])
                 else:
                     input_ids[i] = (input_ids[i][:segment_ids[i].index(1)][:-token_padding] +
                                     input_ids[i][segment_ids[i].index(1):][:-center_padding])
@@ -115,9 +122,8 @@ class EmbedModel(nn.Module):
                                       input_masks[i][segment_ids[i].index(1):][:-center_padding])
                     segment_ids[i] = (segment_ids[i][:segment_ids[i].index(1)][:-token_padding] +
                                       segment_ids[i][segment_ids[i].index(1):][:-center_padding])
-
-            if segment_ids[i].index(1) < 5:
-                print(segment_ids[i], padding_len)
+            if 1 not in segment_ids[i] or segment_ids[i].index(1) < 5:
+                print(segment_ids[i], padding_len, token_padding, center_padding)
             assert len(input_ids[i]) == max_len
             assert len(input_masks[i]) == max_len
             assert len(segment_ids[i]) == max_len

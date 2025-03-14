@@ -21,7 +21,7 @@ def tally_parameters(model):
 
 
 def train(iter, dir, logger, tf_logger, model, embed_model, opt, crit, epoch_num, start_epoch=0, scheduler=None,
-          test_iter=None, val_iter=None, log_freq=1, start_f1=None, score_type='mean'):
+          test_iter=None, val_iter=None, log_freq=1, start_f1=None, score_type='mean', save_name='best.pth'):
     p1=tally_parameters(embed_model)
     p2=tally_parameters(model)
     logger.info("Embed Model Parameter {}".format(p1))
@@ -81,20 +81,20 @@ def train(iter, dir, logger, tf_logger, model, embed_model, opt, crit, epoch_num
                     "type": best_type,
                     "val_f1":best_f1,
                 }
-                torch.save(state, os.path.join(dir, "best.pth"))
+                torch.save(state, os.path.join(dir, save_name))
                 logger.info("Val Best F1score\t{}\t{:.4f}".format(best_type, best_f1))
         else:
             f1s = 0
         t_val = time.process_time()
+        curr_results = [i]
         if test_iter:
-            test_f1s, test_ps, test_rs, _ = val(iter=test_iter, logger=logger, model=model, embed_model=embed_model, prefix='Test',
-                                 crit=crit, log_freq=len(test_iter)//10, test_step = i+1,score_type=score_type)
-        else:
-            test_f1s = 0
-            test_ps = 0
-            test_rs = 0
+            for test_i in test_iter:
+                test_f1s, test_ps, test_rs, _ = val(iter=test_i, logger=logger, model=model, embed_model=embed_model, prefix='Test',
+                                 crit=crit, log_freq=len(test_i)//10, test_step = i+1,score_type=score_type)
+                curr_results += [test_f1s[0], test_ps[0], test_rs[0]]
+
         t_test = time.process_time()
-        curr_results = [i, test_f1s[0], test_ps[0], test_rs[0], t_train-t_epoch, t_val-t_train, t_test-t_val]
+        curr_results += [t_train-t_epoch, t_val-t_train, t_test-t_val]
         results += [curr_results]
         if best_f1 == max(f1s):
             best_epoch = curr_results
@@ -106,7 +106,7 @@ def train(iter, dir, logger, tf_logger, model, embed_model, opt, crit, epoch_num
         time_m = time.process_time()
         if test_iter:
             if val_iter:
-                checkpoint = torch.load(os.path.join(dir, "best.pth"))
+                checkpoint = torch.load(os.path.join(dir, save_name))
                 embed_model.load_state_dict(checkpoint["embed_model"])
                 model.load_state_dict(checkpoint["model"])
                 embed_model = embed_model.to(embed_model.device)
@@ -118,10 +118,16 @@ def train(iter, dir, logger, tf_logger, model, embed_model, opt, crit, epoch_num
             else:
                 best_epoch = epoch_num
                 best_type = None
-            f1s, ps, rs, score_dicts = val(iter=test_iter, logger=logger, model=model, embed_model=embed_model, prefix='Test',
-                      crit=crit, log_freq=len(test_iter)//10, score_type=score_type)
-            logger.info("Test F1score\tEpoch\t{:d}\t{}\t{:.4f}".format(best_epoch, best_type, f1s[0]))
-            return f1s, ps, rs, score_dicts, time_m, results
+            f1, p, r, scores = [], [], [], []
+            for test_i in test_iter:
+                f1s, ps, rs, score_dicts = val(iter=test_i, logger=logger, model=model, embed_model=embed_model, prefix='Test',
+                        crit=crit, log_freq=len(test_i)//10, score_type=score_type)
+                f1 += [f1s]
+                p += [ps]
+                r += [rs]
+                scores += [score_dicts]
+                logger.info("Test F1score\tEpoch\t{:d}\t{}\t{:.4f}".format(best_epoch, best_type, f1s[0]))
+            return f1, p, r, scores, time_m, results
 
 
 if __name__ == '__main__':
