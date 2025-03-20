@@ -21,7 +21,7 @@ def tally_parameters(model):
 
 
 def train(iter, dir, logger, tf_logger, model, embed_model, opt, crit, epoch_num, start_epoch=0, scheduler=None,
-          test_iter=None, val_iter=None, log_freq=1, start_f1=None, score_type='mean', save_name='best.pth'):
+          test_iter=None, val_iter=None, log_freq=1, start_f1=None, score_type='mean', save_name='best.pth', save_last_epoch=False):
     p1=tally_parameters(embed_model)
     p2=tally_parameters(model)
     logger.info("Embed Model Parameter {}".format(p1))
@@ -102,6 +102,15 @@ def train(iter, dir, logger, tf_logger, model, embed_model, opt, crit, epoch_num
         if t_test-t_start + (t_test-t_epoch) > 8*60*60:
             break
     results += [best_epoch]
+    if save_last_epoch:
+        state = {
+            "embed_model": embed_model.state_dict(),
+            "model": model.state_dict(),
+            "epoch": i + 1,
+            "type": best_type,
+            "val_f1": best_f1,
+        }
+        torch.save(state, os.path.join(dir, save_name))
     with torch.no_grad():
         time_m = time.process_time()
         if test_iter:
